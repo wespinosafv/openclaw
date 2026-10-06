@@ -367,7 +367,7 @@ describe("resolveCliRuntimeExecutionProvider", () => {
     expect(isVisibleProvider("acme-cli")).toBe(true);
   });
 
-  it("collapses CLI runtime rows only into a canonical row on the same runtime", () => {
+  it("collapses CLI runtime rows only into a canonical row config pins to that runtime", () => {
     cliBackendsTesting.setDepsForTest({
       resolveRuntimeCliBackends: () => [
         {
@@ -378,23 +378,34 @@ describe("resolveCliRuntimeExecutionProvider", () => {
         },
       ],
     });
+    const config: OpenClawConfig = {
+      agents: {
+        defaults: {
+          models: { "anthropic/claude-opus-5": { agentRuntime: { id: "claude-cli" } } },
+        },
+      },
+    };
     const rows = [
       { provider: "anthropic", id: "claude-opus-5", agentRuntime: { id: "claude-cli" } },
       { provider: "claude-cli", id: "claude-opus-5" },
-      { provider: "anthropic", id: "claude-sonnet-5", agentRuntime: { id: "openclaw" } },
+      // A session runtime override, not config, routes this row through Claude CLI.
+      { provider: "anthropic", id: "claude-sonnet-5", agentRuntime: { id: "claude-cli" } },
       { provider: "claude-cli", id: "claude-sonnet-5" },
+      { provider: "anthropic", id: "claude-fable-5", agentRuntime: { id: "openclaw" } },
+      { provider: "claude-cli", id: "claude-fable-5" },
     ];
-    const refs = (selected?: { provider: string; model: string }) =>
-      omitCliRuntimeAliasTwins(rows, selected).map((row) => `${row.provider}/${row.id}`);
 
-    expect(refs()).toEqual([
+    expect(
+      omitCliRuntimeAliasTwins(rows, { config, agentId: "main" }).map(
+        (row) => `${row.provider}/${row.id}`,
+      ),
+    ).toEqual([
       "anthropic/claude-opus-5",
       "anthropic/claude-sonnet-5",
       "claude-cli/claude-sonnet-5",
+      "anthropic/claude-fable-5",
+      "claude-cli/claude-fable-5",
     ]);
-    expect(refs({ provider: "claude-cli", model: "claude-opus-5" })).toContain(
-      "claude-cli/claude-opus-5",
-    );
   });
 
   it("recognizes retired picker providers without loading CLI backend metadata", () => {

@@ -140,33 +140,35 @@ export function areRuntimeModelRefsEquivalent(
 type RuntimeRoutedModelRow = { provider: string; id: string; agentRuntime?: { id: string } };
 
 /**
- * Drops `<cli-runtime>/<model>` rows whose canonical model row is already routed through that
- * runtime, so one model and route appear once. The current selection stays visible.
+ * Drops `<cli-runtime>/<model>` rows whose canonical row config already pins to that runtime, so
+ * one model and route appear once. A runtime shown only because of a session override does not
+ * count: choosing that canonical row can reset to a different configured route.
  */
 export function omitCliRuntimeAliasTwins<T extends RuntimeRoutedModelRow>(
   rows: readonly T[],
-  selected?: { provider: string; model: string },
+  scope: { config: OpenClawConfig; agentId: string },
 ): T[] {
   const runtimes = new Set(listCliRuntimeModelBackendBindings().map(({ runtime }) => runtime));
   const routeKey = (row: RuntimeRoutedModelRow, runtime: string) =>
     `${normalizeRuntimeModelRefForComparison(`${row.provider}/${row.id}`)}\0${runtime}`;
   const routed = new Set(
-    rows.flatMap((row) =>
-      row.agentRuntime && !runtimes.has(normalizeProviderId(row.provider))
-        ? [routeKey(row, row.agentRuntime.id)]
-        : [],
-    ),
+    rows.flatMap((row) => {
+      const runtime = row.agentRuntime?.id;
+      return runtime &&
+        runtimes.has(runtime) &&
+        !runtimes.has(normalizeProviderId(row.provider)) &&
+        resolveModelRuntimePolicy({
+          ...scope,
+          provider: row.provider,
+          modelId: row.id,
+        }).policy?.id === runtime
+        ? [routeKey(row, runtime)]
+        : [];
+    }),
   );
-  const selectedRef = selected
-    ? normalizeRuntimeModelRefWithoutAlias(`${selected.provider}/${selected.model}`)
-    : undefined;
   return rows.filter((row) => {
     const provider = normalizeProviderId(row.provider);
-    return (
-      !runtimes.has(provider) ||
-      !routed.has(routeKey(row, provider)) ||
-      normalizeRuntimeModelRefWithoutAlias(`${row.provider}/${row.id}`) === selectedRef
-    );
+    return !runtimes.has(provider) || !routed.has(routeKey(row, provider));
   });
 }
 

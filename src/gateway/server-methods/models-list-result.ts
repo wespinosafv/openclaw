@@ -691,7 +691,8 @@ export async function prepareModelsListResult({
         return projected;
       });
       return {
-        models: view === "all" ? models : omitCliRuntimeAliasTwins(models, selectedModel),
+        models:
+          view === "all" ? models : omitCliRuntimeAliasTwins(models, { config: cfg, agentId }),
         ...readOutcomeProjection(),
         ...(decisionModels.length ? { decisionModels } : {}),
       };
