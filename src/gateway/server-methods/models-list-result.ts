@@ -24,6 +24,7 @@ import {
 import type { ModelCatalogSnapshot, ModelCatalogEntry } from "../../agents/model-catalog.types.js";
 import { createModelSpeedPolicyResolver } from "../../agents/model-fast-mode.js";
 import { modelKey } from "../../agents/model-ref-shared.js";
+import { omitCliRuntimeAliasTwins } from "../../agents/model-runtime-aliases.js";
 import { dedupeModelCatalogEntries } from "../../agents/model-selection-shared.js";
 import {
   createModelVisibilityPolicy,
@@ -676,20 +677,21 @@ export async function prepareModelsListResult({
     read: () => {
       const currentCatalog = readCatalog();
       const keyOf = createModelCatalogIdentityKeyResolver();
+      const models = currentCatalog.filter(matchesProvider).map((entry) => {
+        const key = keyOf(entry);
+        const evaluation = evaluations.get(key);
+        if (!evaluation) {
+          throw new Error("Model catalog publication omitted prepared auth evaluation");
+        }
+        const runtimeChoices = runtimeChoiceReaders.get(key)?.();
+        const projected = projectPublic(entry, evaluation);
+        if (runtimeChoices?.length) {
+          projected.runtimeChoices = runtimeChoices;
+        }
+        return projected;
+      });
       return {
-        models: currentCatalog.filter(matchesProvider).map((entry) => {
-          const key = keyOf(entry);
-          const evaluation = evaluations.get(key);
-          if (!evaluation) {
-            throw new Error("Model catalog publication omitted prepared auth evaluation");
-          }
-          const runtimeChoices = runtimeChoiceReaders.get(key)?.();
-          const projected = projectPublic(entry, evaluation);
-          if (runtimeChoices?.length) {
-            projected.runtimeChoices = runtimeChoices;
-          }
-          return projected;
-        }),
+        models: view === "all" ? models : omitCliRuntimeAliasTwins(models, selectedModel),
         ...readOutcomeProjection(),
         ...(decisionModels.length ? { decisionModels } : {}),
       };

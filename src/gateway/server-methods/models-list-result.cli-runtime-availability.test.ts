@@ -108,6 +108,30 @@ describe("models.list CLI runtime availability", () => {
     },
   );
 
+  it.each(["configured", "default"] as const)(
+    "lists a Claude CLI model once when the configured Anthropic row already runs through it (%s)",
+    async (view) => {
+      const result = await listModels({
+        catalog: [
+          providerCatalogEntry("claude-cli", "claude-opus-5"),
+          providerCatalogEntry("claude-cli", "claude-haiku-4-5"),
+        ],
+        staticEntries: [providerCatalogEntry("anthropic", "claude-opus-5")],
+        cfg: config,
+        preparedAuthModes: { "claude-cli": "oauth" },
+        catalogComplete: true,
+        view,
+        includeDefaultModels: false,
+      });
+      expect(
+        result.models.map((model) => [model.provider, model.id, model.agentRuntime?.id]),
+      ).toEqual([
+        ["anthropic", "claude-opus-5", "claude-cli"],
+        ["claude-cli", "claude-haiku-4-5", undefined],
+      ]);
+    },
+  );
+
   it.each([
     { selection: "default", expired: false, sharedOrder: false },
     { selection: "draft", expired: false, sharedOrder: true },

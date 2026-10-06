@@ -12,6 +12,7 @@ import {
   isRetiredModelPickerProvider,
   areRuntimeModelRefsEquivalent,
   isCliRuntimeProvider,
+  omitCliRuntimeAliasTwins,
   resolveCliRuntimeExecutionProvider as resolveCliRuntimeExecutionProviderBase,
 } from "./model-runtime-aliases.js";
 
@@ -364,6 +365,36 @@ describe("resolveCliRuntimeExecutionProvider", () => {
     expect(isVisibleProvider("claude-cli")).toBe(false);
     expect(isCliRuntimeProvider("acme-cli")).toBe(false);
     expect(isVisibleProvider("acme-cli")).toBe(true);
+  });
+
+  it("collapses CLI runtime rows only into a canonical row on the same runtime", () => {
+    cliBackendsTesting.setDepsForTest({
+      resolveRuntimeCliBackends: () => [
+        {
+          id: "claude-cli",
+          modelProvider: "anthropic",
+          pluginId: "anthropic",
+          config: { command: "claude" },
+        },
+      ],
+    });
+    const rows = [
+      { provider: "anthropic", id: "claude-opus-5", agentRuntime: { id: "claude-cli" } },
+      { provider: "claude-cli", id: "claude-opus-5" },
+      { provider: "anthropic", id: "claude-sonnet-5", agentRuntime: { id: "openclaw" } },
+      { provider: "claude-cli", id: "claude-sonnet-5" },
+    ];
+    const refs = (selected?: { provider: string; model: string }) =>
+      omitCliRuntimeAliasTwins(rows, selected).map((row) => `${row.provider}/${row.id}`);
+
+    expect(refs()).toEqual([
+      "anthropic/claude-opus-5",
+      "anthropic/claude-sonnet-5",
+      "claude-cli/claude-sonnet-5",
+    ]);
+    expect(refs({ provider: "claude-cli", model: "claude-opus-5" })).toContain(
+      "claude-cli/claude-opus-5",
+    );
   });
 
   it("recognizes retired picker providers without loading CLI backend metadata", () => {
