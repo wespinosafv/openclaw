@@ -102,14 +102,20 @@ type BuildModelsListResultParams = {
 export async function buildModelsListResult(
   params: BuildModelsListResultParams,
 ): Promise<ModelsListResult> {
-  const prepared = await prepareModelsListResult(params);
-  if (!prepared.isCurrent()) {
-    throw new PreparedModelRuntimePublicationSupersededError(
-      "Model catalog changed while preparing this result. Retry the request.",
-    );
-  }
-  params.readScope?.draftAccountSelection?.assertCurrent();
-  return prepared.read();
+  // A standalone owner's registry is not the process's active one; project rows inside it.
+  return await withPluginRuntimeRegistryScope(
+    params.source.kind === "published" ? params.source.owner.pluginRegistry : undefined,
+    async () => {
+      const prepared = await prepareModelsListResult(params);
+      if (!prepared.isCurrent()) {
+        throw new PreparedModelRuntimePublicationSupersededError(
+          "Model catalog changed while preparing this result. Retry the request.",
+        );
+      }
+      params.readScope?.draftAccountSelection?.assertCurrent();
+      return prepared.read();
+    },
+  );
 }
 
 /** Prepares catalog work once; the returned reader revalidates native readiness without I/O. */
